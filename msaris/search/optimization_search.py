@@ -91,7 +91,7 @@ class SearchClusters:
                     print(f"{target_mass}: {formal} {cosine}")
                     recognised_isotopes.append(
                         {
-                            "formula": formal,
+                            "formula": formula,
                             "delta": abs(mass - mol.averaged_mass),
                             "relative": (
                                                 max(self.it[left:right]) / max(self.it)
