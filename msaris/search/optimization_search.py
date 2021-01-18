@@ -34,6 +34,7 @@ class SearchClusters:
         self.it = it
         self.threshold = threshold
         self.coefficients = {}
+        self.visited = []
 
     def recognise_masses(
             self,
@@ -57,8 +58,7 @@ class SearchClusters:
             composition = {}
             formula = calc_brutto_formula(model)
             mass = calc_mass(model)
-            visited = []
-            if LpStatus[model.status] == "Optimal" and formula not in visited:
+            if LpStatus[model.status] == "Optimal" and formula not in self.visited:
                 print(f"status: {model.status}, {LpStatus[model.status]}")
                 print(f"Delta m/z: {model.objective.value()}")
                 print(f"Average mass = {mass}")
@@ -66,7 +66,7 @@ class SearchClusters:
                 for var in model.variables():
                     if var.value() != 0.0:
                         composition[f"{var.name}"[2:]] = round(float(f"{var.value()}".strip()))
-                visited.append(formula)
+                self.visited.append(formula)
                 if calculated_ions is not None:
                     if formula in calculated_ions:
                         mol = calculated_ions[formula]
