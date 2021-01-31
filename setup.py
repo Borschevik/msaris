@@ -43,7 +43,7 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
-        "Intended Audience :: Science/Research/Industry",
+        "Intended Audience :: Science/Research",
         "Topic :: Scientific/Engineering :: Chemistry",
         "Topic :: Scientific/Engineering :: Information Analysis",
         "Operating System :: OS Independent",
