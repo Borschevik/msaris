@@ -1,32 +1,36 @@
 """
-Molecule generation and rperesentation for genereating theoretical spectre
+Molecule generation and representation for generating theoretical spectre
 """
 import json
 import os
-import pickle
-from typing import NoReturn, Optional
+from typing import (
+    List,
+    Optional,
+)
 
-import typer
-import matplotlib.pyplot as plt
-from molmass import Formula
-import numpy as np
 import IsoSpecPy as iso
-from scipy.spatial import distance
+import matplotlib.pyplot as plt
+import numpy as np
+import typer
+from molmass import Formula
 from scipy.interpolate import interp1d
+from scipy.spatial import distance
 
 from msaris.utils.distributions_util import generate_gauss_distribution
 from msaris.utils.intensities_util import norm
 
 
 class Molecule:
+    """
+    Molecule generation and saving for performing molecule search
+    """
 
-    def __init__(self, formula: str = "", ppm: int = 50, *, scale: bool = False):
+    def __init__(self, *, formula: str = ""):
         self.formula = formula  # saving for using to refer
         self.brutto = self._get_brutto() if formula else None
-        self.ppm = ppm
-        self.scale = scale
-        self.mass_out, self.intens_out = [], []
-        self.mz, self.it, self.weighted_mass = np.array([]), np.array([]), 0
+        self.mass_out: List = []
+        self.intens_out: List = []
+        self.mz, self.it, self.averaged_mass = np.array([]), np.array([]), 0.0
 
     def _get_brutto(self) -> str:
         """
@@ -35,16 +39,17 @@ class Molecule:
         :returns: brutto formula
         """
         f = Formula(self.formula)
-        return "".join(
-            map(lambda x: f"{x[0]}{x[1]}", f.composition())
-        )
+        return "".join(map(lambda x: f"{x[0]}{x[1]}", f.composition()))
 
-    def calculate(self, resolution: int=20) -> NoReturn:
+    def calculate(
+        self, *, resolution: int = 20, ppm: int = 50, scale: bool = False
+    ) -> None:
         """
 
         :param resolution: generating m/z and intensities for provided formula
         :return: None
         """
+        scaling: np.array
 
         try:
             sp = iso.IsoTotalProb(formula=self.brutto, prob_to_cover=0.99999)
@@ -57,17 +62,23 @@ class Molecule:
             self.intens_out += [prob]
 
         self.mz, self.it, self.averaged_mass = generate_gauss_distribution(
-            self.mass_out, self.intens_out, ppm=self.ppm, resolution=resolution
+            self.mass_out, self.intens_out, ppm=ppm, resolution=resolution
         )
 
-        if self.scale:
-            self.scale = 100 / max(self.it)
+        if scale:
+            scaling = 100 / max(self.it)
         else:
-            self.scale = max(self.intens_out) / max(self.it)
+            scaling = max(self.intens_out) / max(self.it)
         # scaling resulting curve
-        self.it = self.it * self.scale
+        self.it = self.it * scaling
 
-    def plot(self, *, save: bool = False, path: str = './', name: Optional[str] = None) -> NoReturn:
+    def plot(
+        self,
+        *,
+        save: bool = False,
+        path: str = "./",
+        name: Optional[str] = None,
+    ) -> None:
         """
         Plot spectra
 
@@ -78,8 +89,6 @@ class Molecule:
         :return: None
         """
         # TODO: change to be more flexible for output params
-        # original linear spectrum - spike train
-        # ax_spiketrain.stem(mass_out, intens_out, markerfmt=' ', use_line_collection='True')
         plt.rcParams["figure.figsize"] = (30, 30)
         # plot settings
         fig, (ax_spiketrain, ax_filtered) = plt.subplots(2, 1, sharex=True)
@@ -87,7 +96,10 @@ class Molecule:
         ax_spiketrain.tick_params(axis="both")
         # tick parameters
         plt.xticks(
-            np.arange(int(min(self.mass_out)) - 1, int(max(self.mass_out)) + 2, 1.0), rotation=-90
+            np.arange(
+                int(min(self.mass_out)) - 1, int(max(self.mass_out)) + 2, 1.0
+            ),
+            rotation=-90,
         )
         markerline, stemlines, baseline = ax_spiketrain.stem(
             self.mass_out,
@@ -115,47 +127,27 @@ class Molecule:
 
         if save:
             name = f"{path}{name}.png" if name else f"{path}{self.formula}.png"
-            fig.savefig(name, dpi=300, format='png', bbox_inches='tight')
+            fig.savefig(name, dpi=300, format="png", bbox_inches="tight")
 
         plt.show()
         plt.close()
 
-    def mol_to_pickle(self, path: str = "./", name: Optional[str] = None) -> NoReturn:
+    def to_dict(self) -> dict:
         """
-        Saves the molecule's to pickle
-        Pickle format allows to save and work with python object directly
-
-        :param path: string default save to place where executed
-        :param name: redfine name default is formula with .mol format
-        :return: None
+        Present result in dict format
+        :return: dictionary of the main parameters
         """
-        if not os.path.isdir(path):
-            os.makedirs(path)
-        name = f"{self.formula}.mol" if name is None else f"{name}.mol"
-        if not path.endswith("/"):
-            path = f"{path}/"
-        print(f"{path}{name}")
-
-        with open(f"{path}{name}", "wb") as outfile:
-            pickle.dump(self, outfile)
-
-        typer.echo(
-            f"Binary file {os.path.abspath(path)}{name} was created ✨"
-        )
-
-    def to_dict(self):
         return {
             "formula": self.formula,
             "brutto": self.brutto,
             "mz": self.mz.tolist(),
             "it": self.it.tolist(),
-            "scale": self.scale,
             "mass_out": self.mass_out,
             "intens_out": self.intens_out,
-            "averaged_mass": self.averaged_mass
+            "averaged_mass": self.averaged_mass,
         }
 
-    def to_json(self, path: str = "./", name: Optional[str] = None) -> NoReturn:
+    def to_json(self, path: str = "./", name: Optional[str] = None) -> None:
         """
         Saves the molecule's to json
 
@@ -174,11 +166,9 @@ class Molecule:
         with open(f"{path}{name}", "w") as outfile:
             json.dump(self.to_dict(), outfile)
 
-        typer.echo(
-            f"✨ JSON with was created: {os.path.abspath(path)}{name} ✨"
-        )
+        typer.echo(f"✨ JSON with was created: {os.path.abspath(path)}{name} ✨")
 
-    def read_dict_data(self, data: dict) -> NoReturn:
+    def read_dict_data(self, data: dict) -> None:
         """
         Gets Molecule from dictionary representation of molecule
 
@@ -190,21 +180,24 @@ class Molecule:
                 value = np.array(value)
             setattr(self, field, value)
 
-    def load(self, file_path: str) -> NoReturn:
+    def load(self, file_path: str) -> None:
         """
         Load file in JSON format
 
         :param: Path to load data
         :return: None
         """
-        with open(file_path, "r") as f:
-            self.read_dict_data(json.load(f))
+        with open(file_path, "r") as file:
+            self.read_dict_data(json.load(file))
 
     def __str__(self) -> str:
         return self.formula
 
     def __repr__(self) -> str:
-        return f"<Molecule(formula={self.formula}, weighted_mass={self.weighted_mass})>"
+        return (
+            f"<Molecule(formula={self.formula},"
+            f" weighted_mass={self.averaged_mass})>"
+        )
 
     def compare(self, experimental: tuple) -> dict:
 
@@ -222,8 +215,12 @@ class Molecule:
         it_t = norm(it_t)
         it_e = norm(it_e)
 
-        interpol_t = interp1d(mz_t, norm(it_t), bounds_error=False, fill_value=(0, 0))
-        interpol_e = interp1d(mz_e, norm(it_e), bounds_error=False, fill_value=(0, 0))
+        interpol_t = interp1d(
+            mz_t, norm(it_t), bounds_error=False, fill_value=(0, 0)
+        )
+        interpol_e = interp1d(
+            mz_e, norm(it_e), bounds_error=False, fill_value=(0, 0)
+        )
         theory = interpol_t(mz_e) * 100
         exp = interpol_e(mz_e) * 100
 

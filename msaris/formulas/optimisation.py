@@ -1,28 +1,61 @@
-#TODO: prototype need to find solution for general case
-from pulp import LpMinimize, LpProblem, LpStatus, lpSum, LpVariable
+"""
+
+    Prototype for pattern calculation in future realeases would be expanded beyond CuCl and PdCl2 case
+
+"""
+# TODO: prototype need to find solution for general case
+from pulp import (
+    LpMinimize,
+    LpProblem,
+    LpVariable,
+    lpSum,
+)
 
 from msaris.formulas.monoisotopic_masses import *
 
 
 def optimize_formula(
-    target_mass,
-    charge,
-    epsilon,
-    no_TBAB=True,
-    no_K=True,
-    no_MeOH=True,
-    no_Cu=False,
-    no_Pd1=True,
-    no_Pd=False,
-    no_NaTFA=True,
-    no_OH=True,
-    no_H2O=True,
-    no_O2=True,
-    no_O=True,
-    no_N2=True,
-    no_Na=True,
-    no_CH3CN=True,
-):
+    target_mass: float,
+    charge: int,
+    epsilon: float,
+    *,
+    no_TBAB: bool = True,
+    no_K: bool = True,
+    no_MeOH: bool = True,
+    no_Cu: bool = False,
+    no_Pd1: bool = True,
+    no_Pd: bool = False,
+    no_NaTFA: bool = True,
+    no_OH: bool = True,
+    no_H2O: bool = True,
+    no_O2: bool = True,
+    no_O: bool = True,
+    no_N2: bool = True,
+    no_Na: bool = True,
+    no_CH3CN: bool = True,
+) -> LpProblem:
+    """
+    Pattern calculation via linear optimization
+
+    :param target_mass: target mass float
+    :param charge: isotope pattern charge
+    :param epsilon: allowed deviation from mass
+    :param no_TBAB:
+    :param no_K:
+    :param no_MeOH:
+    :param no_Cu:
+    :param no_Pd1:
+    :param no_Pd:
+    :param no_NaTFA:
+    :param no_OH:
+    :param no_H2O:
+    :param no_O2:
+    :param no_O:
+    :param no_N2:
+    :param no_Na:
+    :param no_CH3CN:
+    :return: model with calculated coefficients
+    """
 
     # Create the model
     model = LpProblem(name="find-formula", sense=LpMinimize)
@@ -217,14 +250,29 @@ def optimize_formula(
 
     return model
 
-def get_coefficients(model) -> dict:
+
+def get_coefficients(model: LpProblem) -> dict:
+    """
+    Retrieves from calculated mode coefficients in dictionary format
+
+    :param model: calculated model
+    :return: coefficients in dictionary format
+    """
     variables: dict = {}
     for var in model.variables():
-        variables[f"{var.name}"[2:]] = int(round(float(f"{var.value()}".strip())))
+        variables[f"{var.name}"[2:]] = int(
+            round(float(f"{var.value()}".strip()))
+        )
     return variables
 
 
-def calc_brutto_formula(model):
+def calc_brutto_formula(model: LpProblem) -> str:
+    """
+    Get brutto formula for calculated model
+
+    :param model: calculated model
+    :return: brutto formula in string format
+    """
 
     brutto_formula = []
     brutto_out = ""
@@ -314,11 +362,19 @@ def calc_brutto_formula(model):
     return brutto_out
 
 
-def calc_mass(model):
+def calc_mass(model: LpProblem) -> float:
+    """
+    Function to get isotope mass for calculated pattern
+
+    :param model: pulp model
+    :return: calculated isotope mass
+    """
 
     ion_mass = 0.0
 
     for var in model.variables():
         if var.value() != 0.0:
-            ion_mass += d_m["m_" + f"{var.name}"[2:]] * float(f"{var.value()}".strip())
+            ion_mass += d_m["m_" + f"{var.name}"[2:]] * float(
+                f"{var.value()}".strip()
+            )
     return ion_mass

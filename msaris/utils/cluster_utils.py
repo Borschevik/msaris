@@ -1,12 +1,14 @@
-from typing import Iterable, TypeVar
+"""
+    Utuils used for cluster search
+"""
+
+from typing import List
 
 import numpy as np
 from scipy.spatial import ckdtree
 
-IND = TypeVar('IND', Iterable, np.ndarray, int, float)
 
-
-def find_indexes(X: np.ndarray, val: float, max_d: float) -> IND:
+def find_indexes(X: np.ndarray, val: float, max_d: float) -> List[int]:
     """
     Find indexes close to provided value on predefined distance
 
@@ -17,4 +19,11 @@ def find_indexes(X: np.ndarray, val: float, max_d: float) -> IND:
     """
     tree = ckdtree.cKDTree(np.array([X, X]).T)
 
-    return tree.query_ball_point((val, val,), max_d, eps=0.0)
+    return tree.query_ball_point(
+        (
+            val,
+            val,
+        ),
+        max_d,
+        eps=0.0,
+    )

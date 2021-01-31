@@ -1,11 +1,19 @@
-from bisect import bisect_left, bisect_right
-from typing import Any, Optional, Tuple
+"""
+    Various tools for spectre preprocessing
+"""
+from bisect import (
+    bisect_left,
+    bisect_right,
+)
+from typing import (
+    Any,
+    Optional,
+    Tuple,
+)
 
 import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
-
-from msaris.utils.intensities_util import norm
 
 
 def z_score(x: pd.Series, window: int) -> pd.Series:
@@ -25,7 +33,7 @@ def z_score(x: pd.Series, window: int) -> pd.Series:
 
 
 def z_score_filtering(
-        mz: list, it: list, quantile: float = 0.99, window: Optional[int] = None
+    mz: list, it: list, quantile: float = 0.99, window: Optional[int] = None
 ) -> np.array:
     """
     Perform simple z_score filtering for selected mass spectrum
@@ -45,29 +53,35 @@ def z_score_filtering(
         window = int(np.percentile(resolution, 20) + 0.5)
 
     it_copy = it.copy()
-    it_copy = pd.Series(it_copy)
-    zscores = z_score(it_copy, window)
+    it_transformed: pd.Series = pd.Series(it_copy)
+    zscores = z_score(it_transformed, window)
     threshold = zscores.quantile(quantile)
-    it_copy[zscores < threshold] = 0
-    return it_copy.to_numpy()
+    it_transformed[zscores < threshold] = 0
+    return it_transformed.to_numpy()
 
 
-def reduce_data_resolution(mz_r: np.ndarray, it_r: np.ndarray, out_x: int, out_y: int) -> Tuple[Any, Any]:
+def reduce_data_resolution(
+    mz_r: np.ndarray, it_r: np.ndarray, out_x: int, out_y: int
+) -> Tuple[Any, Any]:
     """
-    Reduction of the resolution by using interpelation can be used for high-definition data
+    Reduction of the resolution by using interpolation can be used for high-definition data
     Using regular regrid to reduce resolution of spectra
     :param mz_r: list of m/z values
-    :param it_r: list of intensitves
+    :param it_r: list of intensities
     :param out_x: resulted number of values for m/z
     :param out_y: resulted number of falues for intensities
 
-    :return:
+    :return: interpolated data with reduced resolution
     """
     m = mz_r.shape[0]
     y = np.linspace(0, 1.0 / m, m)
     x = np.linspace(0, 1.0 / m, m)
-    interpolating_function_y = RegularGridInterpolator(points=(y,), values=it_r.T)
-    interpolating_function_x = RegularGridInterpolator(points=(x,), values=mz_r.T)
+    interpolating_function_y = RegularGridInterpolator(
+        points=(y,), values=it_r.T
+    )
+    interpolating_function_x = RegularGridInterpolator(
+        points=(x,), values=mz_r.T
+    )
 
     yv, xv = np.linspace(0, 1.0 / m, out_y), np.linspace(0, 1.0 / m, out_x)
 
@@ -77,15 +91,23 @@ def reduce_data_resolution(mz_r: np.ndarray, it_r: np.ndarray, out_x: int, out_y
     )
 
 
-def filter_intensities(mz: np.array, it: np.array, threshold: float) -> Tuple[np.array, np.array]:
+def filter_intensities(
+    mz: np.array, it: np.array, threshold: float
+) -> Tuple[np.array, np.array]:
+    """
+    Filter instnesition by defined threshold
+    :param mz: m/z
+    :param it: spectrum intensities
+    :param threshold: threshold to filter data
+    :return: tuple with filtered data
+    """
     mz = mz.copy()
     it = it.copy()
     if threshold is not None:
-        above_threshold = np.where(
-            it > threshold
-        )
+        above_threshold = np.where(it > threshold)
         mz = mz[above_threshold]
         it = it[above_threshold]
     return (
-        mz, it,
+        mz,
+        it,
     )

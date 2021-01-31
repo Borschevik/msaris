@@ -1,13 +1,27 @@
-from typing import Optional, List, Tuple
+"""
+Reading and loading data via using OpenMS api for python
+"""
+from typing import (
+    List,
+    Optional,
+    Tuple,
+)
 
-from pyopenms import *
+from pyopenms import (
+    MSExperiment,
+    MzMLFile,
+    Param,
+    SavitzkyGolayFilter,
+    SpectraMerger,
+)
 
 
 def load_data(
-        mgf_filename: str,
-        range_spectrum: tuple = (0, 1600),  # spectrum range
-        min_intensity: Optional[float] = None,  # determine threshold to remove
-        mz_binning_width: float = 5.0,
+    mgf_filename: str,
+    *,
+    range_spectrum: tuple = (0, 1600),  # spectrum range
+    min_intensity: Optional[float] = None,  # determine threshold to remove
+    mz_binning_width: float = 5.0,
 ) -> Tuple[List[float], List[float]]:
     """
     Process and return date from xml file
@@ -29,20 +43,20 @@ def load_data(
         mz_exp, intensity_exp = spectrum.get_peaks()
         if min_intensity is None:
             min_intensity = max(intensity_exp) / 2000
-        for mz, intensity in zip(mz_exp, intensity_exp):
-            if min_mz <= mz <= max_mz:
-                filtered_mz.append(mz)
+        for mz_i, intensity in zip(mz_exp, intensity_exp):
+            if min_mz <= mz_i <= max_mz:
+                filtered_mz.append(mz_i)
                 if intensity >= min_intensity:
                     filtered_intensity.append(intensity)
                 else:
                     filtered_intensity.append(0)
         spectrum.set_peaks((filtered_mz, filtered_intensity))
 
-        gf = SavitzkyGolayFilter()
-        gf_params = gf.getDefaults()
-        gf_params.setValue(b'frame_length', 5, b'')
-        gf.setParameters(gf_params)
-        gf.filter(spectrum)
+        savitzky_golay_filter = SavitzkyGolayFilter()
+        gf_params = savitzky_golay_filter.getDefaults()
+        gf_params.setValue(b"frame_length", 5, b"")
+        savitzky_golay_filter.setParameters(gf_params)
+        savitzky_golay_filter.filter(spectrum)
         result_experiment.addSpectrum(spectrum)
 
     # select spectrum from experiment in defined range
@@ -53,13 +67,14 @@ def load_data(
             ms_levels.append(lvl)
 
     # Merge various MS levels
-    sd = SpectraMerger()
-    p = Param()
-    p.setValue('block_method:rt_block_size', result_experiment.getNrSpectra())
-    p.setValue('mz_binning_width', mz_binning_width)
-    p.setValue('block_method:ms_levels', ms_levels)
-    sd.setParameters(p)
-    sd.mergeSpectraBlockWise(result_experiment)
+    spectra_merger = SpectraMerger()
+    params = Param()
+    params.setValue(
+        "block_method:rt_block_size", result_experiment.getNrSpectra()
+    )
+    params.setValue("mz_binning_width", mz_binning_width)
+    params.setValue("block_method:ms_levels", ms_levels)
+    spectra_merger.setParameters(params)
+    spectra_merger.mergeSpectraBlockWise(result_experiment)
 
     return result_experiment[0].get_peaks()
-

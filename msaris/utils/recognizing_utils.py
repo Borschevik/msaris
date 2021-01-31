@@ -1,5 +1,12 @@
+"""
+
+    Utils with function to make representation of found results for reporting
+
+"""
+
 import re
 from collections import defaultdict
+from typing import Dict
 
 import numpy as np
 
@@ -14,11 +21,11 @@ def formal_formula(composition: dict) -> str:
     """
     metals = ["Cu", "Pd", "K", "Na"]
     anions = ["Cl", "Br"]
-    metal = defaultdict(int)
-    anion = defaultdict(int)
+    metal: Dict[int, int] = defaultdict(int)
+    anion: Dict[int, int] = defaultdict(int)
     ligands = ""
     for group, number in composition.items():
-        without_num = re.split("\d", group)[0]
+        without_num = re.split(r"\d", group)[0]
         if without_num in metals:
             metal[without_num] += number
         elif without_num in anions:
@@ -31,7 +38,7 @@ def formal_formula(composition: dict) -> str:
     return molecule
 
 
-def linspace(start: float, stop: float, step: float=1.) -> np.array:
+def linspace(start: float, stop: float, step: float = 1.0) -> np.array:
     """
     Custom linspace to perform generation of array stepwise
 
@@ -43,4 +50,3 @@ def linspace(start: float, stop: float, step: float=1.) -> np.array:
     """
 
     return np.linspace(start, stop, int((stop - start) / step + 1))
-

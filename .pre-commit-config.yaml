@@ -1,0 +1,44 @@
+default_language_version:
+  python: python3.8
+
+repos:
+- repo: https://github.com/ambv/black
+  rev: stable
+  hooks:
+  - id: black
+    args: ['--experimental-string-processing', '--line-length=79']
+- repo: https://github.com/pre-commit/mirrors-isort
+  rev: v5.4.2
+  hooks:
+  - id: isort
+- repo: https://gitlab.com/pycqa/flake8
+  rev: 3.8.4
+  hooks:
+  - id: flake8
+    exclude: ^msaris/formulas/
+    additional_dependencies: [flake8-bugbear]
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v0.800
+  hooks:
+  - id: mypy
+    exclude: ^msaris/formulas/
+- repo: https://github.com/pre-commit/mirrors-pylint
+  rev: v2.5.2
+  hooks:
+  - id: pylint
+    exclude: ^msaris/formulas/
+- repo: https://github.com/pycqa/bandit
+  rev: 1.7.0
+  hooks:
+  - id: bandit
+    exclude: ^tests/
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v3.4.0
+  hooks:
+  - id: check-byte-order-marker
+  - id: check-case-conflict
+  - id: check-symlinks
+  - id: mixed-line-ending
+  - id: trailing-whitespace
+    args:
+    - --markdown-linebreak-ext=md

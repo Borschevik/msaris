@@ -1,14 +1,17 @@
+"""
+    Function for performing transformations of the intensities
+"""
 import numpy as np
 
 
-def norm(x: list) -> list:
+def norm(intensities: list) -> list:
     """
     Normalisation for intensities
 
     :param: x list with value to normalized
     :return: list of normalized values
     """
-    return x / np.sum(x)
+    return intensities / np.sum(intensities)
 
 
 def get_closest_integer(value: float) -> int:
