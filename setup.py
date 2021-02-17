@@ -23,7 +23,8 @@ KEYWORDS = ", ".join(
 )
 PACKAGES = find_packages()
 DESCRIPTION = """
-Package of classes, methods and function to perform search of isotope patterns, their identification and
+Package of classes, methods and function to
+perform search of isotope patterns, their identification and
 identifying their formulas
 """
 
@@ -55,6 +56,7 @@ setup(
         "pytest>=6.2.2",
         "scipy>=1.6.0",
         "PuLP>=2.4",
+        "multiprocess>=0.70.11.1",
         "openms>=3.6.1",
         "pandas>=1.2.0",
         "numpy>=1.19.5",

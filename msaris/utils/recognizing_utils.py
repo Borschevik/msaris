@@ -15,7 +15,7 @@ def formal_formula(composition: dict) -> str:
     """
     Generate formal formula to have better text representation of the brutto formula
 
-    :param composition: dict with defined fomula variable from optimal calculations
+    :param composition: dict with defined formula variable from optimal calculations
 
     :returns: str
     """
@@ -25,6 +25,8 @@ def formal_formula(composition: dict) -> str:
     anion: Dict[int, int] = defaultdict(int)
     ligands = ""
     for group, number in composition.items():
+        if not number:
+            continue
         without_num = re.split(r"\d", group)[0]
         if without_num in metals:
             metal[without_num] += number

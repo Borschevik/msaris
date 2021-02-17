@@ -1,10 +1,6 @@
 """
     Clusterization algorithms to find isotope patterns ans estimate their averaged mass
 """
-from bisect import (
-    bisect_left,
-    bisect_right,
-)
 from copy import deepcopy
 
 import numpy as np
@@ -13,6 +9,7 @@ from scipy.interpolate import interp1d
 from msaris.reader.preprocessing import filter_intensities
 from msaris.utils.cluster_utils import find_indexes
 from msaris.utils.distributions_util import generate_gauss_distribution
+from msaris.utils.intensities_util import get_spectrum_by_close_values
 
 
 class ClusterSearch:
@@ -52,10 +49,11 @@ class ClusterSearch:
         results = []
         selected = delta_m[np.where(np.round(1 / delta_m) == charge)]
         for i in selected:
-            left = bisect_left(mz, it[0] + i)
-            right = bisect_right(mz, it[-1] - i)
-            plus = interpol(np.add(mz[left:right], i))
-            minus = interpol(np.add(mz[left:right], -i))
+            mz_f, _, _, _ = get_spectrum_by_close_values(
+                mz, it, left_border=mz[0], right_border=mz[-1], eps=1
+            )
+            plus = interpol(np.add(mz_f, i))
+            minus = interpol(np.add(mz_f, -i))
             results.append(np.sum(plus * minus))
         return selected[results.index(max(results))]
 
@@ -118,7 +116,9 @@ class ClusterSearch:
 
         :param mz: m/z of mass spectrometry
         :param it: intensities of provided spectre
+        :param charge: isotope pattern charge
         :param threshold: threshold to filter intensities
+        :param tolerance: tolerance for calculating delta of charge
 
         :return: dict of searched clusters
         """
@@ -127,26 +127,26 @@ class ClusterSearch:
         while mz.shape[0] > 1:
             max_peak_search = mz[np.argmax(it)]
 
-            left = bisect_left(mz, max_peak_search - self.cluster_width)
-            right = bisect_right(mz, max_peak_search + self.cluster_width)
-            mz_x, it_y, _ = generate_gauss_distribution(
-                mz[left:right], it[left:right]
+            mz_x, it_y, left, _ = get_spectrum_by_close_values(
+                mz,
+                it,
+                max_peak_search,
+                max_peak_search,
+                eps=self.cluster_width,
             )
-
+            mz_x, it_y, mass = generate_gauss_distribution(mz_x, it_y)
             delta_mz = self._find_delta_mz(mz_x, it_y, charge)
-            difference = np.abs(mz[left:right] - max_peak_search) / delta_mz
+            difference = np.abs(mz_x - max_peak_search) / delta_mz
             index_delta = np.where(
                 (np.abs(np.round(difference) - difference)) < tolerance
             )[0]
 
             if len(index_delta) > self.min_peaks:
-                mz_f, it_f, mass = generate_gauss_distribution(
-                    mz[left + index_delta], it[left + index_delta]
+                mz_x, it_y, mass = generate_gauss_distribution(
+                    mz[left + index_delta],
+                    it[left + index_delta],
                 )
-                find_clusters[np.round(mass, 3)] = (
-                    mz_f,
-                    it_f,
-                )
+                find_clusters[np.round(mass, 3)] = (mz_x, it_y)
 
             mz = np.delete(mz, left + index_delta)
             it = np.delete(it, left + index_delta)
@@ -159,7 +159,7 @@ class ClusterSearch:
 class MaxClustering:
     """
     Simple realization for clusters based on finding all possible max peak in clusters
-    with defined window and provinding them
+    with defined window and providing them
     """
 
     def __init__(self, window: int = 8, threshold: float = 0.0):
@@ -184,13 +184,12 @@ class MaxClustering:
         while mz.shape[0] > 1:
             max_peak_search = mz[np.argmax(it)]
 
-            left = bisect_left(mz, max_peak_search - self.window)
-            right = bisect_right(mz, max_peak_search + self.window)
+            mz_x, it_y, left, right = get_spectrum_by_close_values(
+                mz, it, max_peak_search, max_peak_search, eps=self.window
+            )
             indexes = list(range(left, right))
 
-            mz_f, it_f, mass = generate_gauss_distribution(
-                mz[indexes], it[indexes]
-            )
+            mz_f, it_f, mass = generate_gauss_distribution(mz_x, it_y)
             find_clusters[np.round(mass, 3)] = (
                 mz_f,
                 it_f,

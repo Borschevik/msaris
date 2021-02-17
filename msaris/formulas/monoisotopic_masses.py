@@ -22,7 +22,7 @@ m_CH3OH = 32.0262
 m_N2 = 28.0061
 m_H2O = 18.0106
 
-d_m = {}
+d_m = dict()
 
 # Transition metals
 d_m["m_Pd"] = d_m["m_Pd1"] = d_m["m_Pd2"] = 106.42

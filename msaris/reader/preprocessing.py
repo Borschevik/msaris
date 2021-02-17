@@ -42,7 +42,7 @@ def z_score_filtering(
     :param quantile: float quantile which defines z-score above which peaks would be retained
     :param window: int for z-score filter
 
-    :returns: list of filtered insenetities
+    :returns: list of filtered intensities
     """
 
     if window is None:
@@ -95,7 +95,7 @@ def filter_intensities(
     mz: np.array, it: np.array, threshold: float
 ) -> Tuple[np.array, np.array]:
     """
-    Filter instnesition by defined threshold
+    Filter intensities by defined threshold
     :param mz: m/z
     :param it: spectrum intensities
     :param threshold: threshold to filter data

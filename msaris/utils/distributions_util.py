@@ -47,7 +47,7 @@ def generate_gauss_distribution(
     expected_value = mass_out
     gauss_filtered = [0.0] * len(mz_x)
     for i, _ in enumerate(expected_value):
-        fwhm = (ppm / 1000000) * mass_out[i]
+        fwhm = (ppm / 10 ** 6) * mass_out[i]
         sigma = float(fwhm / (2 * np.sqrt(2 * np.log(2))))
         gauss_filtered += (
             (1 / (sigma * np.sqrt(2 * np.pi)))
