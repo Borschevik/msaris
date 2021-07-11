@@ -2,6 +2,11 @@
     Clusterization algorithms to find isotope patterns ans estimate their averaged mass
 """
 from copy import deepcopy
+from typing import (
+    Any,
+    Literal,
+    Union,
+)
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -170,6 +175,8 @@ class MaxClustering:
         self,
         mz: np.array,
         it: np.array,
+        *,
+        cluster_mod: Literal["max", "averaged"] = "averaged"
     ) -> dict:
         """
         Get list of cluster and parameters of max
@@ -179,7 +186,10 @@ class MaxClustering:
 
         :returns: list of indexes for defined m/z
         """
+        mass: Union[Any, float, None]
         find_clusters = {}
+        if cluster_mod not in ["max", "averaged"]:
+            raise ValueError("Cluster mod not max or averaged")
         mz, it = filter_intensities(mz, it, self.threshold)
         while mz.shape[0] > 1:
             max_peak_search = mz[np.argmax(it)]
@@ -190,6 +200,8 @@ class MaxClustering:
             indexes = list(range(left, right))
 
             mz_f, it_f, mass = generate_gauss_distribution(mz_x, it_y)
+            if cluster_mod == "max":
+                mass = mz_f[np.argmax(it_f)]
             find_clusters[np.round(mass, 3)] = (
                 mz_f,
                 it_f,

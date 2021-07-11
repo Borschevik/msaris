@@ -48,10 +48,11 @@ def get_spectrum_by_close_values(
     :param eps: epsilon to provide regulation of borders
     :return: closest to left and right border values of spectrum, left and right
     """
+    mz, it = mz.copy(), it.copy()
     left = bisect_left(mz, left_border - eps)
     right = bisect_right(mz, right_border + eps)
 
-    return mz[left:right], it[left:right], left, right
+    return mz[left:right].copy(), it[left:right].copy(), left, right
 
 
 def get_indexes(mz, peak, *, eps=0) -> Tuple[list, int, int]:

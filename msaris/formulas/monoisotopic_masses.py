@@ -6,7 +6,7 @@ m_Cu = 63.546
 # Main-group cations
 m_Na = 22.98977
 m_K = 39.0983
-m_TBAB = 242.2842
+m_TBA = 242.2842
 
 # Anions
 m_OH = 17.0033
@@ -31,7 +31,7 @@ d_m["m_Cu"] = d_m["m_Cu1"] = d_m["m_Cu2"] = 63.546
 # Main-group cations
 d_m["m_Na"] = 22.98977
 d_m["m_K"] = 39.0983
-d_m["m_TBAB"] = 242.2842
+d_m["m_TBA"] = 242.2842
 
 # Anions
 d_m["m_OH"] = 17.0033

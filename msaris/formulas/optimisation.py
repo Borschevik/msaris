@@ -19,7 +19,7 @@ def optimize_formula(
     charge: int,
     epsilon: float,
     *,
-    no_TBAB: bool = True,
+    no_TBA: bool = True,
     no_K: bool = True,
     no_MeOH: bool = True,
     no_Cu: bool = False,
@@ -33,6 +33,7 @@ def optimize_formula(
     no_N2: bool = True,
     no_Na: bool = True,
     no_CH3CN: bool = True,
+    no_Br: bool = True,
 ) -> LpProblem:
     """
     Pattern calculation via linear optimization
@@ -40,11 +41,11 @@ def optimize_formula(
     :param target_mass: target mass float
     :param charge: isotope pattern charge
     :param epsilon: allowed deviation from mass
-    :param no_TBAB:
+    :param no_TBA:
     :param no_K:
+    :param no_Br
     :param no_MeOH:
     :param no_Cu:
-    :param no_Pd1:
     :param no_Pd:
     :param no_NaTFA:
     :param no_OH:
@@ -69,7 +70,7 @@ def optimize_formula(
     # Main-group cations
     n_Na = LpVariable(name="n_Na", lowBound=0, cat="Integer")
     n_K = LpVariable(name="n_K", lowBound=0, cat="Integer")
-    n_TBAB = LpVariable(name="n_TBAB", lowBound=0, cat="Integer")
+    n_TBA = LpVariable(name="n_TBA", lowBound=0, cat="Integer")
 
     # Anions
     n_OH = LpVariable(name="n_OH", lowBound=0, cat="Integer")
@@ -95,7 +96,7 @@ def optimize_formula(
         + 2 * n_Cu2
         + n_Na
         + n_K
-        + n_TBAB
+        + n_TBA
         - n_OH
         - n_Cl
         - n_Br
@@ -106,7 +107,6 @@ def optimize_formula(
         == charge,
         "Charge_constraint",
     )
-
     model += (
         4 * n_Pd1 + 4 * n_Pd2 + 4 * n_Cu1 + 4 * n_Cu2
         >= n_OH
@@ -122,22 +122,21 @@ def optimize_formula(
         + 2 * n_O,
         "Valence_constraint",
     )
-
     model += (
-        n_Pd1 + n_Pd2 + n_Cu1 + n_Cu2 >= n_Na + n_K + n_TBAB,
+        n_Pd1 + n_Pd2 + n_Cu1 + n_Cu2 >= n_Na + n_K + n_TBA,
         "Impurity_constraint: cations",
     )
-
-    model += (n_Cl >= 2 * n_Br + 2 * n_OH + 1, "Impurity_constraint: anions")
-
+    model += (n_Cl >= 2 * n_Br + 2 * n_OH, "Impurity_constraint: anions")
     model += (n_N2 <= 2, "Impurity_constraint: N2 activation")
-
+    model += (n_H2O <= 1, "Impurity_constraint: H2O activation")
+    model += (n_CH3OH <= 3, "Impurity_constraint: MeOH activation")
+    model += (
+        n_CH3CN >= n_CH3OH + n_H2O + n_CF3COO + n_N2,
+        "Acetonitrile constraint",
+    )
     model += (n_O2_2 + n_O2_1 <= 1, "Impurity_constraint: O2 activation")
-
     model += (n_O <= 1, "Impurity_constraint: oxidation")
-
-    model += (n_Pd2 - n_Pd1 >= 0, "Oxidation_constraint: Pd")
-
+    model += (n_Na <= 1, "Impurity_constraint: Natrium")
     model += (n_Cu1 - n_Cu2 >= 0, "Oxidation_constraint: Cu")
 
     model += (
@@ -147,7 +146,7 @@ def optimize_formula(
         + n_Cu2 * m_Cu
         + n_Na * m_Na
         + n_K * m_K
-        + n_TBAB * m_TBAB
+        + n_TBA * m_TBA
         + n_OH * m_OH
         + n_Cl * m_Cl
         + n_Br * m_Br
@@ -171,7 +170,7 @@ def optimize_formula(
         + n_Cu2 * m_Cu
         + n_Na * m_Na
         + n_K * m_K
-        + n_TBAB * m_TBAB
+        + n_TBA * m_TBA
         + n_OH * m_OH
         + n_Cl * m_Cl
         + n_Br * m_Br
@@ -189,9 +188,10 @@ def optimize_formula(
     )
 
     # Control element composition
-    if no_TBAB:
-        model += (n_Br == 0, "Without TBAB: Br-")
-        model += (n_TBAB == 0, "Without TBAB: TBAB+")
+    if no_Br:
+        model += (n_Br == 0, "Without TBA: Br-")
+    if no_TBA:
+        model += (n_TBA == 0, "Without TBA: TBA+")
     if no_K:
         model += (n_K == 0, "Without K+")
     if no_MeOH:
@@ -201,11 +201,8 @@ def optimize_formula(
     if no_Cu:
         model += (n_Cu1 == 0, "Without Cu(I)")
         model += (n_Cu2 == 0, "Without Cu(II)")
-    if no_Pd1:
-        model += (n_Pd1 == 0, "Without Pd(I)")
     if no_Pd:
-        if no_Pd1:
-            model += (n_Pd1 == 0, "Without Pd(I)")
+        model += (n_Pd1 == 0, "Without Pd(I)")
         model += (n_Pd2 == 0, "Without Pd(II)")
     if no_NaTFA:
         if no_Na:
@@ -232,7 +229,7 @@ def optimize_formula(
             n_Cu2 * m_Cu,
             n_Na * m_Na,
             n_K * m_K,
-            n_TBAB * m_TBAB,
+            n_TBA * m_TBA,
             n_OH * m_OH,
             n_Cl * m_Cl,
             n_Br * m_Br,
@@ -314,10 +311,10 @@ def calc_brutto_formula(model: LpProblem) -> str:
         d_brutto["F"] += 3 * d_units["CF3COO"]
         d_brutto["O"] += 2 * d_units["CF3COO"]
 
-    if "TBAB" in d_units:
-        d_brutto["C"] += 16 * d_units["TBAB"]
-        d_brutto["H"] += 36 * d_units["TBAB"]
-        d_brutto["N"] += 1 * d_units["TBAB"]
+    if "TBA" in d_units:
+        d_brutto["C"] += 16 * d_units["TBA"]
+        d_brutto["H"] += 36 * d_units["TBA"]
+        d_brutto["N"] += 1 * d_units["TBA"]
 
     if "OH" in d_units:
         d_brutto["O"] += 1 * d_units["OH"]

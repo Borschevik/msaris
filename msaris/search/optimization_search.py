@@ -1,4 +1,4 @@
-# pylint: disable=R0902
+# pylint: disable=R0902,R0801
 """
 Prototype for search
 Basically for now it would be harcoded for CuCl nad PdCl2 clusters
@@ -69,6 +69,7 @@ class SearchClusters:
         *,
         threshold: float = 0.7,
         verbose: bool = False,
+        adjusted: bool = False,
         njobs: int = 1,
     ):
         """
@@ -78,6 +79,8 @@ class SearchClusters:
         :param it: original spectrum intensities
         :param charge: charge of found ions
         :param threshold: threshold for metric
+        :param adjusted: adjust m/z values according to
+        delta between theoretical and experimental values
         :param verbose: parameter to show logs for calculating isotope pattern formulas
         :param njobs: parameter for using number of CPU for calculating jobs in parallel
         """
@@ -88,6 +91,7 @@ class SearchClusters:
         self.threshold = threshold
         self.coefficients: Dict[str, int] = {}
         self.visited: List[str] = []
+        self.adjusted = adjusted
         self.njobs = njobs
         self.params: dict = {}
         self.target_mass: float = 0.0
@@ -104,7 +108,13 @@ class SearchClusters:
             ": ".join((key, str(val)))
             for (key, val) in get_coefficients(model).items()
         )
-        print(f"Composition: \n{report}\n")
+        print(f"Composition: \n{report}")
+
+    @staticmethod
+    def _get_delta_avg(mol: Molecule, spectrum: list) -> float:
+        mz_av, it_av = spectrum
+        it_av = it_av / sum(it_av)
+        return abs(sum(mz_av * it_av) - mol.averaged_mass)
 
     def __calculate_results(self, epsilon_range: tuple) -> list:
         recognised = []
@@ -120,8 +130,6 @@ class SearchClusters:
                 LpStatus[model.status] == "Optimal"
                 and formula not in self.visited
             ):
-                if self.verbose:
-                    self._verbose(model, formula, mass)
                 composition = get_coefficients(model)
                 self.visited.append(formula)
                 if (
@@ -137,20 +145,28 @@ class SearchClusters:
                 mz_f, it_f, _, _ = get_spectrum_by_close_values(
                     self.mz, self.it, mol.mz[0], mol.mz[-1]
                 )
-                spectrum = (
+                mz_f, it_f = mz_f.copy(), it_f.copy()
+                m_x = mz_f[np.argmax(it_f)]
+                m_t = mol.mz[np.argmax(mol.it)]
+                delta_b = m_x - m_t
+
+                spectrum = [
                     mz_f,
                     it_f,
-                )
+                ]
+                delta_avg = self._get_delta_avg(mol, spectrum)
                 metrics = mol.compare(spectrum)
                 cosine = metrics["cosine"]
                 if cosine <= self.threshold:
                     formal = formal_formula(composition)
                     if self.verbose:
+                        self._verbose(model, formula, mass)
                         print(f"{self.target_mass}: {formal} {cosine}")
                     recognised.append(
                         {
                             "formula": formula,
-                            "delta": abs(model.objective.value()),
+                            "delta_max": abs(delta_b),
+                            "delta_avg": delta_avg,
                             "relative": (max(it_f) / max(self.it)) * 100,
                             "mz": mol.mz,
                             "it": mol.it,

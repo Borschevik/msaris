@@ -3,34 +3,49 @@ Molecule generation and representation for generating theoretical spectre
 """
 import json
 import os
+from bisect import (
+    bisect_left,
+    bisect_right,
+)
 from typing import (
     List,
     Optional,
 )
 
 import IsoSpecPy as iso
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import typer
+import typer  # pylint: disable=C0411
 from molmass import Formula
 from scipy.interpolate import interp1d
-from scipy.spatial import distance
+from scipy.spatial import (
+    ckdtree,
+    distance,
+)
 
 from msaris.utils.distributions_util import generate_gauss_distribution
-from msaris.utils.intensities_util import norm
+from msaris.utils.intensities_util import (
+    get_spectrum_by_close_values,
+    norm,
+)
 
 
-class Molecule:
+class Molecule:  # pylint: disable=R0902
     """
     Molecule generation and saving for performing molecule search
     """
 
-    def __init__(self, *, formula: str = ""):
+    def __init__(self, *, formula: str = "", delta: float = 0.5):
         self.formula = formula  # saving for using to refer
         self.brutto = self._get_brutto() if formula else None
         self.mass_out: List = []
         self.intens_out: List = []
-        self.mz, self.it, self.averaged_mass = np.array([]), np.array([]), 0.0
+        self.mz: np.array = np.array([])
+        self.it: np.array = np.array([])
+        self.bar_raw = np.array([])
+        self.averaged_mass: float = 0.0
+        self.delta: float = delta
 
     def _get_brutto(self) -> str:
         """
@@ -40,6 +55,20 @@ class Molecule:
         """
         f = Formula(self.formula)
         return "".join(map(lambda x: f"{x[0]}{x[1]}", f.composition()))
+
+    def _get_bar_isotope(self):
+        """
+        Generating raw bar isotope pattern
+        :return:
+        """
+        non_zero = np.argwhere(np.array(self.intens_out) > 0)
+        self.bar_raw = self.intens_out.copy()
+        for ind in non_zero:
+            left = bisect_left(self.mass_out, self.mass_out[ind] - self.delta)
+            right = bisect_right(
+                self.mass_out, self.mass_out[ind] + self.delta
+            )
+            self.bar_raw[left:right] = self.intens_out[ind]
 
     def calculate(
         self, *, resolution: int = 20, ppm: int = 50, scale: bool = False
@@ -227,3 +256,102 @@ class Molecule:
         metrics["cosine"] = distance.cosine(theory, exp)
         # TODO: improve and add other statistics calculations
         return metrics
+
+
+def plot_graph_for_comparing_molecules(
+    mz: np.array,
+    it: np.array,
+    formula: str,
+    *,
+    save: bool = False,
+    path: str = "./",
+    step: float = 0.5,
+    font: int = 18,
+):
+    """
+    Provides plot with comparing stats with original spectrum
+    :param mz:  original spectrum m/z values
+    :param it: original spectrum intensity
+    :param formula: formula to find in original spectrum
+    :param save: save plot into provided path
+    :param path: path to save plot
+    :param step: parameter to tweak width of the spectrum
+    """
+    mol = Molecule(formula=formula)
+    mol.calculate()
+    mz, it = mz.copy(), it.copy()
+    bar_mz: List = list()
+    bar_it: List = list()
+    visited: List = list()
+
+    mz_f, it_f, _, _ = get_spectrum_by_close_values(
+        mz, it, mol.mz[0], mol.mz[-1]
+    )
+    mpl.rcParams["xtick.labelsize"] = font
+    mpl.rcParams["ytick.labelsize"] = font
+    max_it_x_ind, max_it_t_ind = np.argmax(it_f), np.argmax(mol.it)
+    m_x, it_max_x, m_t, _ = (
+        mz_f[max_it_x_ind],
+        it_f[max_it_x_ind],
+        mol.mz[max_it_t_ind],
+        mol.it[max_it_t_ind],
+    )
+    tree = ckdtree.cKDTree(np.array([mol.mz, mol.mz]).T)
+    for _, val in enumerate(mol.mass_out):
+        inds = tree.query_ball_point((val, val), step)
+        S1, S2 = set(inds), set(visited)
+        if S1.intersection(S2):
+            continue
+        visited.extend(inds)
+        bar_mz.append(np.mean(mol.mz[inds]))
+        bar_it.append(np.mean(mol.it[inds]))
+
+    delta_b = m_x - m_t
+    spectrum = (
+        mz_f,
+        it_f,
+    )
+    stats = {
+        "delta": abs(delta_b),
+        "metrics": mol.compare(spectrum),
+        "relative": max(it_f) / max(it),
+    }
+    _, ax = plt.subplots(1, 1, figsize=(15, 5))
+    ax.bar(
+        bar_mz,
+        (bar_it / max(bar_it)) * 100,
+        width=step,
+        align="center",
+        alpha=1,
+        color="r",
+    )
+    ax.plot(
+        spectrum[0],
+        (spectrum[1] / it_max_x) * 100,
+        color="black",
+    )
+    ax.set_xlabel("M/Z", fontsize=20)
+    ax.set_ylabel("Intensity", fontsize=20)
+    labels = [
+        formula,
+        f"Delta m/z: {stats['delta']:.3f}",
+        f"Cosine: {stats['metrics']['cosine']:.3f}",
+        f"Relative: {stats['relative']:.3f}",
+    ]
+    ax.text(
+        0.8,
+        0.8,
+        "\n".join(labels),
+        color="black",
+        horizontalalignment="center",
+        verticalalignment="center",
+        fontsize=font,
+        transform=ax.transAxes,
+    )
+    ax.set_title(f"{formula}", fontsize=20)
+    if save and path:
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(f"{path}/{formula}.png", dpi=600)
+    plt.show()
+    plt.close()
