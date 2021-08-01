@@ -29,6 +29,7 @@ from msaris.utils.intensities_util import (
     get_spectrum_by_close_values,
     norm,
 )
+from msaris.utils.molecule_utils import convert_into_formula_for_plot
 
 
 class Molecule:  # pylint: disable=R0902
@@ -330,10 +331,11 @@ def plot_graph_for_comparing_molecules(
         (spectrum[1] / it_max_x) * 100,
         color="black",
     )
+    plotted_formula = convert_into_formula_for_plot(formula)
     ax.set_xlabel("M/Z", fontsize=20)
     ax.set_ylabel("Intensity", fontsize=20)
     labels = [
-        formula,
+        plotted_formula,
         f"Delta m/z: {stats['delta']:.3f}",
         f"Cosine: {stats['metrics']['cosine']:.3f}",
         f"Relative: {stats['relative']:.3f}",
@@ -348,7 +350,7 @@ def plot_graph_for_comparing_molecules(
         fontsize=font,
         transform=ax.transAxes,
     )
-    ax.set_title(f"{formula}", fontsize=20)
+    ax.set_title(f"{plotted_formula}", fontsize=20)
     if save and path:
         if not os.path.exists(path):
             os.makedirs(path)
