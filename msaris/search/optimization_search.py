@@ -4,15 +4,19 @@ Prototype for search
 Basically for now it would be harcoded for CuCl nad PdCl2 clusters
 In future could would be improved and added possibility to use ANN or LP optimisation by choice
 """
+from collections import defaultdict
 from multiprocessing import Pool
 from typing import (
+    Any,
     Dict,
     List,
     Optional,
     Tuple,
 )
 
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from pulp import (
     LpProblem,
     LpStatus,
@@ -26,6 +30,10 @@ from msaris.formulas.optimisation import (
 )
 from msaris.molecule.molecule import Molecule
 from msaris.utils.intensities_util import get_spectrum_by_close_values
+from msaris.utils.molecule_utils import (
+    color_fader,
+    convert_into_formula_for_plot,
+)
 from msaris.utils.recognizing_utils import (
     formal_formula,
     linspace,
@@ -110,12 +118,6 @@ class SearchClusters:
         )
         print(f"Composition: \n{report}")
 
-    @staticmethod
-    def _get_delta_avg(mol: Molecule, spectrum: list) -> float:
-        mz_av, it_av = spectrum
-        it_av = it_av / sum(it_av)
-        return abs(sum(mz_av * it_av) - mol.averaged_mass)
-
     def __calculate_results(self, epsilon_range: tuple) -> list:
         recognised = []
         start, end, step = epsilon_range
@@ -146,16 +148,12 @@ class SearchClusters:
                     self.mz, self.it, mol.mz[0], mol.mz[-1]
                 )
                 mz_f, it_f = mz_f.copy(), it_f.copy()
-                m_x = mz_f[np.argmax(it_f)]
-                m_t = mol.mz[np.argmax(mol.it)]
-                delta_b = m_x - m_t
 
-                spectrum = [
+                spectrum = (
                     mz_f,
                     it_f,
-                ]
-                delta_avg = self._get_delta_avg(mol, spectrum)
-                metrics = mol.compare(spectrum)
+                )
+                metrics = mol.compare(spectrum, windowed=True, window=0.1)
                 cosine = metrics["cosine"]
                 if cosine <= self.threshold:
                     formal = formal_formula(composition)
@@ -164,14 +162,12 @@ class SearchClusters:
                         print(f"{self.target_mass}: {formal} {cosine}")
                     recognised.append(
                         {
+                            **metrics,
                             "formula": formula,
-                            "delta_max": abs(delta_b),
-                            "delta_avg": delta_avg,
                             "relative": (max(it_f) / max(self.it)) * 100,
                             "mz": mol.mz,
                             "it": mol.it,
                             "mass": mol.averaged_mass,
-                            "metrics": metrics,
                             "composition": composition,
                             "spectrum": spectrum,
                         }
@@ -211,3 +207,129 @@ class SearchClusters:
         self.calculated_ions = calculated_ions
         self.ions_path = ions_path
         return self.__calculate_results(epsilon_range)
+
+
+# pylint: disable=R0915
+def plot_results(
+    mz: np.array,
+    it: np.array,
+    df: pd.DataFrame,
+    *,
+    save: bool = False,
+    save_path: str = "./",
+    mass_col: str = "mass",
+    c1: str = "blue",
+    c2: str = "red",
+) -> None:
+    """
+    Plot results on original spectra
+
+    :param mz: m/z of spectra
+    :param it: intensity of spectra
+    :param df: dataframe with data to save must contain
+    :param save: save bool value to save
+    :param save_path: path to save is save is true
+    :param mass_col: column with mass to sort
+    :param c1: the first color
+    :param c2: the second color
+    :return:
+    """
+    data_entries: Dict[str, List[Any]] = defaultdict(list)
+    colors = []
+    count_entries = df.shape[0]
+    plt.figure(figsize=(20, 10))
+    max_it = max(it)
+    plt.plot(mz, (it / max_it) * 100, color="black")
+    count: int = 0
+
+    heights, locations = [], []
+    for row in df.iterrows():
+        colour = color_fader(c1, c2, mix=count / (count_entries + 1))
+        colors.append(colour)
+        ml = Molecule(formula=row[1]["brutto"])
+        ml.calculate()
+        brutto: str = f"{ml.brutto}"
+
+        it_n = row[1]["relative"] / max(ml.it)
+        plt.plot(
+            ml.mz,
+            it_n * ml.it,
+            color=colour,
+        )
+        molecular_formula = convert_into_formula_for_plot(brutto)
+        condensed_formula = convert_into_formula_for_plot(
+            row[1]["brutto_formal"]
+        )
+        data_entries["#"].append(count + 1)
+        data_entries["Mass"].append(
+            round(sum(ml.mz * ml.it / np.sum(ml.it)), 2)
+        )
+        data_entries["Molecular formula"].append(molecular_formula)
+        data_entries["Condensed formula"].append(condensed_formula)
+        data_entries["Cosine"].append(f"{row[1]['cosine']:.3f}")
+        data_entries["Relative int., %"].append(f"{row[1]['relative']:.3f}")
+        heights.append(row[1]["relative"])
+        locations.append(row[1][mass_col])
+        count += 1
+
+    for ind, _ in enumerate(heights):
+        x1 = [0, 0]
+        y1 = [0, 0]
+        if abs(locations[ind - 1] - locations[ind]) <= 10:
+            x1[0] += locations[ind]
+            y1[0] += heights[ind]
+            heights[ind] = heights[ind] + 2
+            locations[ind] = locations[ind - 1] + 15
+            x1[1] += locations[ind]
+            y1[1] += heights[ind] + 0.7
+        plt.plot(x1, y1, "-", color=colors[ind])
+        plt.text(
+            locations[ind],
+            heights[ind] + 1,
+            f"{ind + 1}",
+            color=colors[ind],
+            horizontalalignment="center",
+            verticalalignment="center",
+            fontsize=14,
+        )
+        count += 1
+
+    plt.xticks(list(range(0, 1600, 200)), fontsize=18)
+    plt.yticks(list(range(0, 120, 10)), fontsize=18)
+    plt.xlabel("M/Z", fontsize=20)
+    plt.ylabel("Intensity, %", fontsize=20)
+    plt.autoscale(enable=True, axis="x", tight=True)
+    plt.autoscale(enable=True, axis="y", tight=True)
+    plt.savefig(f"{save_path}_total.png", dpi=300)
+    plt.clf()
+    plt.cla()
+    plt.close()
+    df_d = pd.DataFrame(data_entries)
+    fig, ax = plt.subplots()
+    fig.patch.set_visible(False)
+    fig.tight_layout()
+    ax.axis("off")
+    table = ax.table(
+        cellText=df_d.values,
+        colLabels=df_d.columns,
+        loc="center",
+        cellLoc="center",
+    )
+    table.scale(1, 2)
+    table_props = table.properties()
+    table_cells = table_props["celld"]
+    clr = 0
+    for i, cell in enumerate(table_cells.values()):
+        if i < len(table_cells) - 6:
+            cell.get_text().set_fontsize(15)
+            try:
+                cell.get_text().set_color(colors[clr])
+            except ValueError as e:
+                print(e)
+            if i != 0 and i % 6 == 0:
+                clr += 1
+    table.auto_set_column_width(col=list(range(len(df_d.columns))))
+
+    if save:
+        fig.savefig(f"{save_path}_table.png", dpi=300, bbox_inches="tight")
+    plt.plot()

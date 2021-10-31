@@ -71,11 +71,52 @@ class Molecule:  # pylint: disable=R0902
             )
             self.bar_raw[left:right] = self.intens_out[ind]
 
+    def select_windowed_signals_by_molecule(
+        self, mz: np.array, it: np.array, *, window: float = 0.1
+    ):
+        """
+        Select from spectra peaks around generated theoretical isotope pattern
+
+        :param mz: m/z of mass spectra
+        :param it: intensity of mass spectra
+        :param window: window for selecting around theoretical isotope
+        :return:
+        """
+        bar_mz: List = list()
+        bar_it: List = list()
+        new_mz, new_it = mz.copy(), np.zeros(len(it))
+        visited: List = list()
+        indexes: List = []
+        tree = ckdtree.cKDTree(np.array([self.mz, self.mz]).T)
+        for _, val in enumerate(self.mass_out):
+            inds = tree.query_ball_point((val, val), window)
+            S1, S2 = set(inds), set(visited)
+            if S1.intersection(S2):
+                continue
+            visited.extend(inds)
+            bar_mz.append(np.mean(self.mz[inds]))
+            bar_it.append(np.mean(self.it[inds]))
+
+        tree = ckdtree.cKDTree(np.array([mz, mz]).T)
+        for mz_t_i in bar_mz:
+            inds = tree.query_ball_point(
+                (mz_t_i, mz_t_i),
+                window,
+                eps=0.0,
+            )
+            indexes.extend(inds)
+
+        indexes = list(set(indexes))
+        new_mz[indexes] = mz[indexes]
+        new_it[indexes] = it[indexes]
+
+        return new_mz, new_it, bar_mz, bar_it
+
     def calculate(
         self, *, resolution: int = 20, ppm: int = 50, scale: bool = False
     ) -> None:
-        """
 
+        """
         :param resolution: generating m/z and intensities for provided formula
         :return: None
         """
@@ -229,21 +270,43 @@ class Molecule:  # pylint: disable=R0902
             f" weighted_mass={self.averaged_mass})>"
         )
 
-    def compare(self, experimental: tuple) -> dict:
+    def _get_delta_avg(self, spectrum: tuple) -> float:
+        mz_av, it_av = spectrum
+        it_av = it_av / sum(it_av)
+        return abs(sum(mz_av * it_av) - self.averaged_mass)
+
+    def compare(
+        self,
+        experimental: tuple,
+        *,
+        windowed: bool = False,
+        window: float = 0.1,
+    ) -> dict:
 
         """
         Function to perform calculations for the theoretical and experimental spectrum
         Based on interpolation selected peaks are recalculated to the same mz_t value
 
         :param experimental: m/z and it of experimantal data
+        :param windowed: define window to cut around from experimental spectrum by using theoretical
+        :param window: window to cut around experimental peaks
 
         :return: calculated metrics for the selected spectras
         """
         metrics: dict = {}
         mz_t, it_t = self.mz.copy(), self.it.copy()
-        mz_e, it_e = experimental
+        if windowed:
+            mz_e, it_e, _, _ = self.select_windowed_signals_by_molecule(
+                experimental[0], experimental[1], window=window
+            )
+        else:
+            mz_e, it_e = experimental
         it_t = norm(it_t)
         it_e = norm(it_e)
+
+        m_x = mz_e[np.argmax(it_e)]
+        m_t = mz_t[np.argmax(it_t)]
+        delta_b = m_x - m_t
 
         interpol_t = interp1d(
             mz_t, norm(it_t), bounds_error=False, fill_value=(0, 0)
@@ -255,80 +318,77 @@ class Molecule:  # pylint: disable=R0902
         exp = interpol_e(mz_e) * 100
 
         metrics["cosine"] = distance.cosine(theory, exp)
+        metrics["delta_max"] = abs(delta_b)
+        metrics["delta_avg"] = self._get_delta_avg((mz_e, it_e))
         # TODO: improve and add other statistics calculations
         return metrics
 
 
-def plot_graph_for_comparing_molecules(
+def compare_and_visualize(
     mz: np.array,
     it: np.array,
     formula: str,
     *,
     save: bool = False,
     path: str = "./",
-    step: float = 0.5,
+    window: float = 0.1,
     font: int = 18,
 ):
     """
-    Provides plot with comparing stats with original spectrum
-    :param mz:  original spectrum m/z values
-    :param it: original spectrum intensity
-    :param formula: formula to find in original spectrum
-    :param save: save plot into provided path
-    :param path: path to save plot
-    :param step: parameter to tweak width of the spectrum
+    Comparing and visualize and isotope pattern with mass specter
+
+    :param mz: m/z
+    :param it: intensity
+    :param formula: formula of isotope pattern in string format
+    :param save: bool value to save plot
+    :param path: path where save plot
+    :param window: parameter to decide bar plot length and
+    :param font: font size in int
+    :return:
     """
     mol = Molecule(formula=formula)
     mol.calculate()
     mz, it = mz.copy(), it.copy()
-    bar_mz: List = list()
-    bar_it: List = list()
-    visited: List = list()
 
     mz_f, it_f, _, _ = get_spectrum_by_close_values(
         mz, it, mol.mz[0], mol.mz[-1]
     )
     mpl.rcParams["xtick.labelsize"] = font
     mpl.rcParams["ytick.labelsize"] = font
-    max_it_x_ind, max_it_t_ind = np.argmax(it_f), np.argmax(mol.it)
-    m_x, it_max_x, m_t, _ = (
-        mz_f[max_it_x_ind],
-        it_f[max_it_x_ind],
+    mz_c, it_c, bar_mz, bar_it = mol.select_windowed_signals_by_molecule(
+        mz_f, it_f, window=window
+    )
+    max_it_x_ind, max_it_t_ind = np.argmax(it_c), np.argmax(mol.it)
+    _, it_max_x, _, _ = (
+        mz_c[max_it_x_ind],
+        it_c[max_it_x_ind],
         mol.mz[max_it_t_ind],
         mol.it[max_it_t_ind],
     )
-    tree = ckdtree.cKDTree(np.array([mol.mz, mol.mz]).T)
-    for _, val in enumerate(mol.mass_out):
-        inds = tree.query_ball_point((val, val), step)
-        S1, S2 = set(inds), set(visited)
-        if S1.intersection(S2):
-            continue
-        visited.extend(inds)
-        bar_mz.append(np.mean(mol.mz[inds]))
-        bar_it.append(np.mean(mol.it[inds]))
-
-    delta_b = m_x - m_t
-    spectrum = (
-        mz_f,
-        it_f,
+    metrics = mol.compare(
+        (
+            mz_c,
+            it_c,
+        )
     )
     stats = {
-        "delta": abs(delta_b),
-        "metrics": mol.compare(spectrum),
+        "delta": metrics["delta_max"],
+        "cosine": metrics["cosine"],
         "relative": max(it_f) / max(it),
     }
     _, ax = plt.subplots(1, 1, figsize=(15, 5))
     ax.bar(
         bar_mz,
         (bar_it / max(bar_it)) * 100,
-        width=step,
+        width=window,
         align="center",
         alpha=1,
         color="r",
     )
+    ind = np.argsort(mz_c)
     ax.plot(
-        spectrum[0],
-        (spectrum[1] / it_max_x) * 100,
+        mz_c[ind],
+        (it_c[ind] / it_max_x) * 100,
         color="black",
     )
     plotted_formula = convert_into_formula_for_plot(formula)
@@ -337,7 +397,7 @@ def plot_graph_for_comparing_molecules(
     labels = [
         plotted_formula,
         f"Delta m/z: {stats['delta']:.3f}",
-        f"Cosine: {stats['metrics']['cosine']:.3f}",
+        f"Cosine: {stats['cosine']:.3f}",
         f"Relative: {stats['relative']:.3f}",
     ]
     ax.text(
