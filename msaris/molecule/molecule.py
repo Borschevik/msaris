@@ -279,7 +279,7 @@ class Molecule:  # pylint: disable=R0902
         self,
         experimental: tuple,
         *,
-        windowed: bool = False,
+        windowed: bool = True,
         window: float = 0.1,
     ) -> dict:
 
@@ -287,26 +287,27 @@ class Molecule:  # pylint: disable=R0902
         Function to perform calculations for the theoretical and experimental spectrum
         Based on interpolation selected peaks are recalculated to the same mz_t value
 
-        :param experimental: m/z and it of experimantal data
+        :param experimental: m/z and it of experimental data
         :param windowed: define window to cut around from experimental spectrum by using theoretical
         :param window: window to cut around experimental peaks
 
-        :return: calculated metrics for the selected spectras
+        :return: calculated metrics for the selected spectra
         """
         metrics: dict = {}
         mz_t, it_t = self.mz.copy(), self.it.copy()
+        mz_e, it_e = experimental
+        max_spectrum = max(it_e)
         if windowed:
             mz_e, it_e, _, _ = self.select_windowed_signals_by_molecule(
-                experimental[0], experimental[1], window=window
+                mz_e, it_e, window=window
             )
-        else:
-            mz_e, it_e = experimental
-        it_t = norm(it_t)
-        it_e = norm(it_e)
-
-        m_x = mz_e[np.argmax(it_e)]
-        m_t = mz_t[np.argmax(it_t)]
-        delta_b = m_x - m_t
+        max_it_x_ind, max_it_t_ind = np.argmax(it_e), np.argmax(self.it)
+        mz_max_x, mol_mz = (
+            mz_e[max_it_x_ind],
+            self.mz[max_it_t_ind],
+        )
+        metrics["relative"] = max(it_e) / max_spectrum
+        metrics["delta_max"] = abs(mz_max_x - mol_mz)
 
         interpol_t = interp1d(
             mz_t, norm(it_t), bounds_error=False, fill_value=(0, 0)
@@ -318,7 +319,6 @@ class Molecule:  # pylint: disable=R0902
         exp = interpol_e(mz_e) * 100
 
         metrics["cosine"] = distance.cosine(theory, exp)
-        metrics["delta_max"] = abs(delta_b)
         metrics["delta_avg"] = self._get_delta_avg((mz_e, it_e))
         # TODO: improve and add other statistics calculations
         return metrics
@@ -359,7 +359,7 @@ def compare_and_visualize(
         mz_f, it_f, window=window
     )
     max_it_x_ind, max_it_t_ind = np.argmax(it_c), np.argmax(mol.it)
-    _, it_max_x, _, _ = (
+    mz_max_x, it_max_x, mol_mz_x, _ = (
         mz_c[max_it_x_ind],
         it_c[max_it_x_ind],
         mol.mz[max_it_t_ind],
@@ -372,9 +372,9 @@ def compare_and_visualize(
         )
     )
     stats = {
-        "delta": metrics["delta_max"],
+        "delta": abs(mz_max_x - mol_mz_x),
         "cosine": metrics["cosine"],
-        "relative": max(it_f) / max(it),
+        "relative": it_max_x / max(it),
     }
     _, ax = plt.subplots(1, 1, figsize=(15, 5))
     ax.bar(

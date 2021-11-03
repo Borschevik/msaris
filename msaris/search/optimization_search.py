@@ -29,7 +29,6 @@ from msaris.formulas.optimisation import (
     optimize_formula,
 )
 from msaris.molecule.molecule import Molecule
-from msaris.utils.intensities_util import get_spectrum_by_close_values
 from msaris.utils.molecule_utils import (
     color_fader,
     convert_into_formula_for_plot,
@@ -75,7 +74,8 @@ class SearchClusters:
         it: np.array,
         charge: int,
         *,
-        threshold: float = 0.7,
+        threshold: float = 0.5,
+        intensity_threshold: float = 0.01,
         verbose: bool = False,
         adjusted: bool = False,
         njobs: int = 1,
@@ -103,6 +103,7 @@ class SearchClusters:
         self.njobs = njobs
         self.params: dict = {}
         self.target_mass: float = 0.0
+        self.intensity_threshold = intensity_threshold
         self.calculated_ions: Optional[dict] = None
         self.ions_path: Optional[str] = "./"
 
@@ -144,27 +145,29 @@ class SearchClusters:
                     mol.calculate()
                     if self.ions_path:
                         mol.to_json(self.ions_path)
-                mz_f, it_f, _, _ = get_spectrum_by_close_values(
-                    self.mz, self.it, mol.mz[0], mol.mz[-1]
-                )
-                mz_f, it_f = mz_f.copy(), it_f.copy()
 
                 spectrum = (
-                    mz_f,
-                    it_f,
+                    self.mz.copy(),
+                    self.it.copy(),
                 )
-                metrics = mol.compare(spectrum, windowed=True, window=0.1)
+                metrics = mol.compare(spectrum, windowed=True, window=0.05)
                 cosine = metrics["cosine"]
-                if cosine <= self.threshold:
+                if (
+                    cosine <= self.threshold
+                    and metrics["relative"] > self.intensity_threshold
+                ):
                     formal = formal_formula(composition)
                     if self.verbose:
                         self._verbose(model, formula, mass)
-                        print(f"{self.target_mass}: {formal} {cosine}")
+                        print(
+                            f"{self.target_mass}: {formal} {cosine}\n"
+                            f"Relative: {metrics['relative']}"
+                        )
                     recognised.append(
                         {
                             **metrics,
                             "formula": formula,
-                            "relative": (max(it_f) / max(self.it)) * 100,
+                            "relative": metrics["relative"],
                             "mz": mol.mz,
                             "it": mol.it,
                             "mass": mol.averaged_mass,
@@ -250,7 +253,7 @@ def plot_results(
         ml.calculate()
         brutto: str = f"{ml.brutto}"
 
-        it_n = row[1]["relative"] / max(ml.it)
+        it_n = row[1]["relative"] * 100 / max(ml.it)
         plt.plot(
             ml.mz,
             it_n * ml.it,
@@ -267,7 +270,9 @@ def plot_results(
         data_entries["Molecular formula"].append(molecular_formula)
         data_entries["Condensed formula"].append(condensed_formula)
         data_entries["Cosine"].append(f"{row[1]['cosine']:.3f}")
-        data_entries["Relative int., %"].append(f"{row[1]['relative']:.3f}")
+        data_entries["Relative int., %"].append(
+            f"{row[1]['relative']*100:.3f}"
+        )
         heights.append(row[1]["relative"])
         locations.append(row[1][mass_col])
         count += 1

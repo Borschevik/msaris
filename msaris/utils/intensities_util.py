@@ -17,7 +17,8 @@ def norm(intensities: list) -> list:
     :param: x list with value to normalized
     :return: list of normalized values
     """
-    return intensities / np.sum(intensities)
+    intensities_c = intensities.copy()
+    return intensities_c / np.sum(intensities_c)
 
 
 def get_closest_integer(value: float) -> int:
@@ -38,7 +39,7 @@ def get_spectrum_by_close_values(
     *,
     eps: float = 0.0
 ) -> Tuple[list, list, int, int]:
-    """int
+    """
     Function to get segment of spectrum by left and right
     border
     :param mz: m/z array

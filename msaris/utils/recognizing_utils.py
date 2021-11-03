@@ -13,7 +13,7 @@ import numpy as np
 
 def formal_formula(composition: dict) -> str:
     """
-    Generate formal formula to have better text representation of the brutto formula
+    Generate formal formula to have better text representation of the molecular formula
 
     :param composition: dict with defined formula variable from optimal calculations
 
