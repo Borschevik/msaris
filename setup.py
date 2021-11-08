@@ -22,11 +22,13 @@ KEYWORDS = ", ".join(
     ]
 )
 PACKAGES = find_packages()
-DESCRIPTION = """
-Package of classes, methods and function to
-perform search of isotope patterns, their identification and
-identifying their formulas
-"""
+try:
+    import pypandoc
+
+    long_description = pypandoc.convert("README.md", "rst")
+except (IOError, ImportError):
+    DESCRIPTION = open("README.md").read()
+
 
 setup(
     name=NAME,

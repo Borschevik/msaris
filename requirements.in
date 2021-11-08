@@ -16,3 +16,4 @@ isort==5.4.2
 flake8==3.8.4
 pytest
 pre-commit
+pypandoc==1.6.4
