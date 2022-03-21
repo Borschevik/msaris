@@ -9,7 +9,7 @@ identifying their formulas
 
 To install last version from pypi following command can be used
 
-> pip install msaris==0.1.8b2
+> pip install msaris==0.1.9
 
 It is also possible to install from cloned repository via sdist installation
 
