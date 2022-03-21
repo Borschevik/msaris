@@ -102,15 +102,17 @@ class Molecule:  # pylint: disable=R0902
             inds = tree.query_ball_point(
                 (mz_t_i, mz_t_i),
                 window,
-                eps=0.0,
+                eps=0.01,
             )
             indexes.extend(inds)
 
         indexes = list(set(indexes))
         new_mz[indexes] = mz[indexes]
         new_it[indexes] = it[indexes]
+        left = bisect_left(new_mz, self.mz[0])
+        right = bisect_right(new_mz, self.mz[-1])
 
-        return new_mz, new_it, bar_mz, bar_it
+        return new_mz[left:right], new_it[left:right], bar_mz, bar_it
 
     def calculate(
         self, *, resolution: int = 20, ppm: int = 50, scale: bool = False
@@ -301,13 +303,16 @@ class Molecule:  # pylint: disable=R0902
             mz_e, it_e, _, _ = self.select_windowed_signals_by_molecule(
                 mz_e, it_e, window=window
             )
-        max_it_x_ind, max_it_t_ind = np.argmax(it_e), np.argmax(self.it)
-        mz_max_x, mol_mz = (
-            mz_e[max_it_x_ind],
-            self.mz[max_it_t_ind],
-        )
+        t_max_peak = self.mz[np.argmax(self.it)]
+        left_max_limit = bisect_left(mz_e, t_max_peak - 1.5)
+        right_max_limit = bisect_right(mz_e, t_max_peak + 1.5)
+        spec_r_max = mz_e[left_max_limit:right_max_limit][
+            np.argmax(it_e[left_max_limit:right_max_limit])
+        ]
         metrics["relative"] = max(it_e) / max_spectrum
-        metrics["delta_max"] = abs(mz_max_x - mol_mz)
+        metrics["delta_max"] = abs(spec_r_max - t_max_peak)
+        metrics["ppm"] = metrics["delta_max"] / (t_max_peak) * 10 ** 6
+        metrics["max_peak"] = t_max_peak
 
         interpol_t = interp1d(
             mz_t, norm(it_t), bounds_error=False, fill_value=(0, 0)
@@ -375,6 +380,7 @@ def compare_and_visualize(
         "delta": abs(mz_max_x - mol_mz_x),
         "cosine": metrics["cosine"],
         "relative": it_max_x / max(it),
+        "ppm": metrics["ppm"],
     }
     _, ax = plt.subplots(1, 1, figsize=(15, 5))
     ax.bar(
@@ -399,6 +405,7 @@ def compare_and_visualize(
         f"Delta m/z: {stats['delta']:.3f}",
         f"Cosine: {stats['cosine']:.3f}",
         f"Relative: {stats['relative']:.3f}",
+        f"Error: {stats['ppm']:.3f}",
     ]
     ax.text(
         0.8,
