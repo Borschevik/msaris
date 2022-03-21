@@ -11,7 +11,6 @@ from pyopenms import (
     MSExperiment,
     MzMLFile,
     Param,
-    SavitzkyGolayFilter,
     SpectraMerger,
 )
 
@@ -51,12 +50,6 @@ def load_data(
                 else:
                     filtered_intensity.append(0)
         spectrum.set_peaks((filtered_mz, filtered_intensity))
-
-        savitzky_golay_filter = SavitzkyGolayFilter()
-        gf_params = savitzky_golay_filter.getDefaults()
-        gf_params.setValue(b"frame_length", 5, b"")
-        savitzky_golay_filter.setParameters(gf_params)
-        savitzky_golay_filter.filter(spectrum)
         result_experiment.addSpectrum(spectrum)
 
     # select spectrum from experiment in defined range

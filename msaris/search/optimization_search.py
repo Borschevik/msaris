@@ -76,9 +76,11 @@ class SearchClusters:
         *,
         threshold: float = 0.5,
         intensity_threshold: float = 0.01,
+        ppm_threshold: float = 20.0,
         verbose: bool = False,
         adjusted: bool = False,
         njobs: int = 1,
+        window: float = 0.1,
     ):
         """
         Initializing optimization search algorithm search is based to find list with metrics for
@@ -89,20 +91,24 @@ class SearchClusters:
         :param threshold: threshold for metric
         :param adjusted: adjust m/z values according to
         delta between theoretical and experimental values
+        :param ppm_threshold: ppm error threshold
         :param verbose: parameter to show logs for calculating isotope pattern formulas
         :param njobs: parameter for using number of CPU for calculating jobs in parallel
+        :param window: define window for optimization search
         """
         self.charge = charge
         self.mz = mz
         self.it = it
         self.verbose = verbose
         self.threshold = threshold
+        self.ppm_threshold = ppm_threshold
         self.coefficients: Dict[str, int] = {}
         self.visited: List[str] = []
         self.adjusted = adjusted
         self.njobs = njobs
         self.params: dict = {}
         self.target_mass: float = 0.0
+        self.window = window
         self.intensity_threshold = intensity_threshold
         self.calculated_ions: Optional[dict] = None
         self.ions_path: Optional[str] = "./"
@@ -150,10 +156,15 @@ class SearchClusters:
                     self.mz.copy(),
                     self.it.copy(),
                 )
-                metrics = mol.compare(spectrum, windowed=True, window=0.05)
+                metrics = mol.compare(
+                    spectrum, windowed=True, window=self.window
+                )
                 cosine = metrics["cosine"]
+                ppm = metrics["ppm"]
+                relative = metrics["relative"]
                 if (
                     cosine <= self.threshold
+                    and ppm <= self.ppm_threshold
                     and metrics["relative"] > self.intensity_threshold
                 ):
                     formal = formal_formula(composition)
@@ -161,18 +172,21 @@ class SearchClusters:
                         self._verbose(model, formula, mass)
                         print(
                             f"{self.target_mass}: {formal} {cosine}\n"
-                            f"Relative: {metrics['relative']}"
+                            f"Relative: {relative}\n"
+                            f"Error, ppm: {ppm}"
                         )
                     recognised.append(
                         {
                             **metrics,
                             "formula": formula,
-                            "relative": metrics["relative"],
+                            "relative": relative,
                             "mz": mol.mz,
                             "it": mol.it,
                             "mass": mol.averaged_mass,
                             "composition": composition,
                             "spectrum": spectrum,
+                            "ppm": ppm,
+                            "max_peak": metrics["max_peak"],
                         }
                     )
 
@@ -264,12 +278,11 @@ def plot_results(
             row[1]["brutto_formal"]
         )
         data_entries["#"].append(count + 1)
-        data_entries["Mass"].append(
-            round(sum(ml.mz * ml.it / np.sum(ml.it)), 2)
-        )
+        data_entries["Mass"].append(round(row[1]["max_peak"], 3))
         data_entries["Molecular formula"].append(molecular_formula)
         data_entries["Condensed formula"].append(condensed_formula)
         data_entries["Cosine"].append(f"{row[1]['cosine']:.3f}")
+        data_entries["ppm"].append(round(row[1]["ppm"], 3))
         data_entries["Relative int., %"].append(
             f"{row[1]['relative']*100:.3f}"
         )
@@ -325,13 +338,13 @@ def plot_results(
     table_cells = table_props["celld"]
     clr = 0
     for i, cell in enumerate(table_cells.values()):
-        if i < len(table_cells) - 6:
+        if i < len(table_cells) - 7:
             cell.get_text().set_fontsize(15)
             try:
                 cell.get_text().set_color(colors[clr])
             except ValueError as e:
                 print(e)
-            if i != 0 and i % 6 == 0:
+            if i != 0 and i % 7 == 0:
                 clr += 1
     table.auto_set_column_width(col=list(range(len(df_d.columns))))
 
